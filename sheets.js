@@ -236,8 +236,20 @@ const unloadDataToAll = async (spreadsheetId) => {
             "all!A:N"
         );
 
-        // Объединяем существующие данные с новыми данными из Sheet1
-        const updatedAllData = [...existingAllData, ...sheet1Data];
+        // Получаем текущую дату и время
+        const now = new Date();
+        const dateTimeString = now.toLocaleString();
+
+        // Создаем новый массив с датой и временем выгрузки, пустой строкой, данными из Sheet1 и еще одной пустой строкой
+        const newData = [
+            [`Выгрузка от ${dateTimeString}`],
+            [],
+            ...sheet1Data,
+            [],
+        ];
+
+        // Объединяем существующие данные с новыми данными
+        const updatedAllData = [...existingAllData, ...newData];
 
         // Очищаем лист all
         await gsapi.spreadsheets.values.clear({
