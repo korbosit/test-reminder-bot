@@ -199,7 +199,7 @@ const enableReminder = async (chatId, reminderType, bot, reminderTasks) => {
 // Функция для отключения напоминаний
 const disableReminder = (chatId, reminderType) => {
     if (reminderTasks[chatId] && reminderTasks[chatId][reminderType]) {
-        reminderTasks[chatId][reminderType].stop();
+        reminderTasks[chatId][reminderType].stop(); // Остановка задачи
         delete reminderTasks[chatId][reminderType];
         bot.sendMessage(chatId, "Напоминание отключено.");
     } else {
@@ -209,6 +209,48 @@ const disableReminder = (chatId, reminderType) => {
         );
     }
 };
+
+// Обработчик команды /disable_daily_tasks
+bot.onText(/\/disable_daily_tasks/, async (msg) => {
+    const chatId = msg.chat.id;
+    disableReminder(chatId, "enable_daily_reminder");
+    const userId = chatId.toString();
+    await updateReminderStatus(
+        config.spreadsheetId,
+        userId,
+        "enable_daily_reminder",
+        "disable"
+    );
+    bot.sendMessage(chatId, "Ежедневные напоминания отключены ✅");
+});
+
+// Обработчик команды /disable_weekly_tasks
+bot.onText(/\/disable_weekly_tasks/, async (msg) => {
+    const chatId = msg.chat.id;
+    disableReminder(chatId, "enable_weekly_reminder");
+    const userId = chatId.toString();
+    await updateReminderStatus(
+        config.spreadsheetId,
+        userId,
+        "enable_weekly_reminder",
+        "disable"
+    );
+    bot.sendMessage(chatId, "Еженедельные напоминания отключены ✅");
+});
+
+// Обработчик команды /disable_monthly_tasks
+bot.onText(/\/disable_monthly_tasks/, async (msg) => {
+    const chatId = msg.chat.id;
+    disableReminder(chatId, "enable_monthly_reminder");
+    const userId = chatId.toString();
+    await updateReminderStatus(
+        config.spreadsheetId,
+        userId,
+        "enable_monthly_reminder",
+        "disable"
+    );
+    bot.sendMessage(chatId, "Ежемесячные напоминания отключены ✅");
+});
 
 // Функция для обработки добавления комментариев
 const handleAddComment = async (chatId, goalType) => {
