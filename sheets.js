@@ -266,6 +266,29 @@ const unloadDataToAll = async (spreadsheetId) => {
     }
 };
 
+const updateReminderStatus = async (
+    spreadsheetId,
+    userId,
+    reminderType,
+    status
+) => {
+    try {
+        const rowIndex = await getUserRowIndex(spreadsheetId, userId);
+        const columnMap = {
+            enable_daily_reminder: `O${rowIndex}`,
+            enable_weekly_reminder: `P${rowIndex}`,
+            enable_monthly_reminder: `Q${rowIndex}`,
+        };
+
+        await updateDataInSheet(spreadsheetId, columnMap[reminderType], [
+            status,
+        ]);
+    } catch (error) {
+        logError(`Ошибка при обновлении статуса напоминания: ${error}`);
+        throw error;
+    }
+};
+
 module.exports = {
     getDataFromSheet,
     appendDataToSheet,
@@ -277,4 +300,5 @@ module.exports = {
     formatDateForKiev,
     checkUserExists,
     unloadDataToAll,
+    updateReminderStatus,
 };

@@ -17,6 +17,7 @@ const {
     updateDataInSheet,
     checkUserExists,
     unloadDataToAll,
+    updateReminderStatus,
 } = require("./sheets");
 
 const { log, logError } = require("./logger");
@@ -100,16 +101,12 @@ const enableReminder = async (chatId, reminderType, bot, reminderTasks) => {
     const reminderMap = {
         enable_daily_reminder: {
             schedule: "30 9,16 * * 1-5", // 9:30 AM и 4:00 PM по Киевскому времени (UTC+3) с понедельника по пятницу
-            // schedule: "30 6,16 * * 1-5", // 9:30 AM и 4:00 PM по Киевскому времени (UTC+3) с понедельника по пятницу
-            // schedule: "35 10,16 * * 1-5",
-            // schedule: "* * * * *", // 10:15 AM и 4:00 PM с понедельника по пятницу
             message: "Твои цели на день 👇🤘✌️ ",
             goalsCallback: "daily_goals",
             reminderMessage:
                 "Ежедневные напоминания включены ✌️. Они будут приходить тебе каждый день в 🕘 9:30 утра и 16:00 по Киевскому времени в рабочие дни с понедельника по пятницу.",
         },
         enable_weekly_reminder: {
-            // schedule: "35 6 * * 1", // 9:35 AM по Киевскому времени (UTC+3) каждый понедельник
             schedule: "35 9 * * 1", // 9:35 AM по Киевскому времени (UTC+3) каждый понедельник
             message: "Твои цели на неделю 👇🤘✌️ ",
             goalsCallback: "weekly_goals",
@@ -117,7 +114,6 @@ const enableReminder = async (chatId, reminderType, bot, reminderTasks) => {
                 "Еженедельные напоминания включены ✌️. Они будут приходить тебе каждый понедельник в 🕘 9:35 утра по Киевскому времени.",
         },
         enable_monthly_reminder: {
-            // schedule: "40 6 1-7 * *", // 9:40 AM по Киевскому времени (UTC+3) в первый понедельник каждого месяца
             schedule: "40 9 1 * 1", // 9:40 AM по Киевскому времени (UTC+3) в первый понедельник каждого месяца
             message: "Твои цели на месяц 👇🤘✌️ ",
             goalsCallback: "monthly_goals",
@@ -157,6 +153,15 @@ const enableReminder = async (chatId, reminderType, bot, reminderTasks) => {
             // Сохраняем задачу
             reminderTasks[chatId] = reminderTasks[chatId] || {};
             reminderTasks[chatId][reminderType] = task;
+
+            // Обновляем статус напоминания в таблице
+            const userId = chatId.toString();
+            await updateReminderStatus(
+                config.spreadsheetId,
+                userId,
+                reminderType,
+                "enable"
+            );
 
             // Отправляем сообщение с кнопкой "Комментарии"
             bot.sendMessage(chatId, reminder.reminderMessage, {
