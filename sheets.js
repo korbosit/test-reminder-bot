@@ -5,12 +5,14 @@ const client = new google.auth.JWT(keys.client_email, null, keys.private_key, [
     "https://www.googleapis.com/auth/spreadsheets",
 ]);
 
+const { log, logError } = require("./logger");
+
 client.authorize((err, tokens) => {
     if (err) {
-        console.log(err);
+        log(err);
         return;
     } else {
-        console.log("Connected to Google Sheets API");
+        log("Connected to Google Sheets API");
     }
 });
 
@@ -29,7 +31,7 @@ const getDataFromSheet = async (spreadsheetId, range) => {
         });
         return response.data.values || [[]]; // Возвращаем пустой массив с пустым массивом внутри, если данных нет
     } catch (error) {
-        console.error(`Ошибка при получении данных: ${error}`);
+        logError(`Ошибка при получении данных: ${error}`);
         throw error;
     }
 };
@@ -47,7 +49,7 @@ const appendDataToSheet = async (spreadsheetId, range, values) => {
         });
         return response;
     } catch (error) {
-        console.error(`Ошибка при добавлении данных: ${error}`);
+        logError(`Ошибка при добавлении данных: ${error}`);
         throw error;
     }
 };
@@ -65,7 +67,7 @@ const updateDataInSheet = async (spreadsheetId, range, values) => {
         });
         return response;
     } catch (error) {
-        console.error(`Ошибка при обновлении данных: ${error}`);
+        logError(`Ошибка при обновлении данных: ${error}`);
         throw error;
     }
 };
@@ -81,9 +83,7 @@ const getNextFreeRow = async (spreadsheetId, sheetName) => {
         const values = response.data.values || [];
         return values.length + 1;
     } catch (error) {
-        console.error(
-            `Ошибка при получении следующей свободной строки: ${error}`
-        );
+        logError(`Ошибка при получении следующей свободной строки: ${error}`);
         throw error;
     }
 };
@@ -105,9 +105,7 @@ const getUserRowIndex = async (spreadsheetId, userId) => {
 
         return userIndex + 1;
     } catch (error) {
-        console.error(
-            `Ошибка при получении индекса строки пользователя: ${error}`
-        );
+        logError(`Ошибка при получении индекса строки пользователя: ${error}`);
         throw error;
     }
 };
@@ -126,7 +124,7 @@ const getUserGoals = async (spreadsheetId, userId, goalType) => {
         const response = await getDataFromSheet(spreadsheetId, range);
         return response[0] ? response[0] : []; // Возвращаем пустой массив, если данных нет
     } catch (error) {
-        console.error(`Ошибка при получении данных целей: ${error}`);
+        logError(`Ошибка при получении данных целей: ${error}`);
         return []; // Возвращаем пустой массив в случае ошибки
     }
 };
@@ -186,7 +184,7 @@ const updateUserGoals = async (
         ]);
         await updateDataInSheet(spreadsheetId, `I${rowIndex}`, [kievDateTime]);
     } catch (error) {
-        console.error(`Ошибка при обновлении данных целей: ${error}`);
+        logError(`Ошибка при обновлении данных целей: ${error}`);
         throw error;
     }
 };
@@ -204,23 +202,19 @@ const formatDateForKiev = (dateString) => {
     });
 };
 
-const checkUserExists = async (spreadsheetId, userId, userName) => {
+const checkUserExists = async (spreadsheetId, userId) => {
     try {
         const response = await gsapi.spreadsheets.values.get({
             spreadsheetId,
-            range: "Sheet1!A:B",
+            range: "Sheet1!A:A", // Проверяем только колонку с userId
         });
 
         const values = response.data.values || [];
-        const userExists = values.some(
-            (row) => row[0] === userId.toString() && row[1] === userName
-        );
+        const userExists = values.some((row) => row[0] === userId.toString());
 
         return userExists;
     } catch (error) {
-        console.error(
-            `Ошибка при проверке существования пользователя: ${error}`
-        );
+        logError(`Ошибка при проверке существования пользователя: ${error}`);
         throw error;
     }
 };
@@ -267,7 +261,7 @@ const unloadDataToAll = async (spreadsheetId) => {
             },
         });
     } catch (error) {
-        console.error(`Ошибка при выгрузке данных: ${error}`);
+        logError(`Ошибка при выгрузке данных: ${error}`);
         throw error;
     }
 };

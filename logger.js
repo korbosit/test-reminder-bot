@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const logFile = path.join(__dirname, "bot.log");
+const errorFile = path.join(__dirname, "errors.log");
 
 function log(message) {
     const timestamp = new Date().toISOString();
@@ -10,4 +11,13 @@ function log(message) {
     fs.appendFileSync(logFile, logMessage);
 }
 
-module.exports = log;
+function logError(error) {
+    const timestamp = new Date().toISOString();
+    const errorMessage = `${timestamp} - ${error.stack || error}\n`;
+    fs.appendFileSync(errorFile, errorMessage);
+}
+
+module.exports = {
+    log,
+    logError,
+};

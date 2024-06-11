@@ -1,6 +1,11 @@
 const TelegramBot = require("node-telegram-bot-api");
 const config = require("./config");
 const cron = require("node-cron");
+const fs = require("fs");
+const path = require("path");
+
+const logFile = path.join(__dirname, "bot.log");
+const errorFile = path.join(__dirname, "errors.log");
 const {
     getDataFromSheet,
     appendDataToSheet,
@@ -14,6 +19,8 @@ const {
     unloadDataToAll,
 } = require("./sheets");
 
+const { log, logError } = require("./logger");
+
 const ADMIN_USER_ID = 239415373;
 
 const bot = new TelegramBot(config.botToken, { polling: true });
@@ -23,7 +30,7 @@ let awaitingComment = {};
 
 // Очистка кэша при перезапуске бота
 bot.on("polling_error", (error) => {
-    console.error(`Polling error: ${error.message}`);
+    logError(`Polling error: ${error.message}`);
     registeredUsers = {};
     reminderTasks = {};
 });
@@ -35,19 +42,15 @@ bot.onText(/\/start/, async (msg) => {
     const userId = chatId.toString();
 
     try {
-        const userExists = await checkUserExists(
-            config.spreadsheetId,
-            userId,
-            firstName
-        );
+        const userExists = await checkUserExists(config.spreadsheetId, userId);
 
         if (userExists) {
-            bot.sendMessage(
+            await bot.sendMessage(
                 chatId,
-                `Пользователь ${userId} с именем ${firstName} уже существует!`
+                `Пользователь c таким id ::: ${userId} ::: с именем ${firstName} уже существует!`
             );
-            sendWelcomeMessage(chatId, firstName);
-            sendWelcomeButtons(chatId, firstName);
+            await sendWelcomeMessage(chatId, firstName);
+            await sendWelcomeButtons(chatId, firstName);
         } else {
             // Находим следующую свободную строку
             const nextFreeRow = await getNextFreeRow(
@@ -66,12 +69,12 @@ bot.onText(/\/start/, async (msg) => {
             registeredUsers[chatId] = true;
 
             // Отправляем приветственное сообщение и кнопки
-            sendWelcomeMessage(chatId, firstName);
-            sendWelcomeButtons(chatId, firstName);
+            await sendWelcomeMessage(chatId, firstName);
+            await sendWelcomeButtons(chatId, firstName);
         }
     } catch (error) {
-        console.error(`Ошибка при регистрации пользователя: ${error}`);
-        bot.sendMessage(
+        logError(`Ошибка при регистрации пользователя: ${error}`);
+        await bot.sendMessage(
             chatId,
             "Произошла ошибка при регистрации. Пожалуйста, попробуйте позже."
         );
@@ -96,22 +99,30 @@ bot.onText(/\/clear_cache/, async (msg) => {
 const enableReminder = async (chatId, reminderType, bot, reminderTasks) => {
     const reminderMap = {
         enable_daily_reminder: {
-            schedule: "30 6,16 * * 1-5", // 9:30 AM и 4:00 PM по Киевскому времени (UTC+3) с понедельника по пятницу
+            schedule: "30 9,16 * * 1-5", // 9:30 AM и 4:00 PM по Киевскому времени (UTC+3) с понедельника по пятницу
+            // schedule: "30 6,16 * * 1-5", // 9:30 AM и 4:00 PM по Киевскому времени (UTC+3) с понедельника по пятницу
+            // schedule: "35 10,16 * * 1-5",
+            // schedule: "* * * * *", // 10:15 AM и 4:00 PM с понедельника по пятницу
             message: "Твои цели на день 👇🤘✌️ ",
             goalsCallback: "daily_goals",
-            reminderMessage: "Ежедневное напоминание включено.",
+            reminderMessage:
+                "Ежедневные напоминания включены ✌️. Они будут приходить тебе каждый день в 🕘 9:30 утра и 16:00 по Киевскому времени в рабочие дни с понедельника по пятницу.",
         },
         enable_weekly_reminder: {
-            schedule: "35 6 * * 1", // 9:35 AM по Киевскому времени (UTC+3) каждый понедельник
+            // schedule: "35 6 * * 1", // 9:35 AM по Киевскому времени (UTC+3) каждый понедельник
+            schedule: "35 9 * * 1", // 9:35 AM по Киевскому времени (UTC+3) каждый понедельник
             message: "Твои цели на неделю 👇🤘✌️ ",
             goalsCallback: "weekly_goals",
-            reminderMessage: "Еженедельное напоминание включено.",
+            reminderMessage:
+                "Еженедельные напоминания включены ✌️. Они будут приходить тебе каждый понедельник в 🕘 9:35 утра по Киевскому времени.",
         },
         enable_monthly_reminder: {
-            schedule: "40 6 1-7 * *", // 9:40 AM по Киевскому времени (UTC+3) в первый понедельник каждого месяца
+            // schedule: "40 6 1-7 * *", // 9:40 AM по Киевскому времени (UTC+3) в первый понедельник каждого месяца
+            schedule: "40 9 1 * 1", // 9:40 AM по Киевскому времени (UTC+3) в первый понедельник каждого месяца
             message: "Твои цели на месяц 👇🤘✌️ ",
             goalsCallback: "monthly_goals",
-            reminderMessage: "Ежемесячное напоминание включено.",
+            reminderMessage:
+                "Ежемесячные напоминания включены ✌️. Они будут приходить тебе в первый понедельник каждого месяца в 🕘 9:40 утра по Киевскому времени.",
         },
     };
 
@@ -135,7 +146,7 @@ const enableReminder = async (chatId, reminderType, bot, reminderTasks) => {
                         `${reminder.message}:\n\n${formattedGoals}`
                     );
                 } catch (error) {
-                    console.error(`Ошибка при обработке данных: ${error}`);
+                    logError(`Ошибка при обработке данных: ${error}`);
                     bot.sendMessage(
                         chatId,
                         "Произошла ошибка при обработке данных. Пожалуйста, попробуйте позже."
@@ -163,7 +174,7 @@ const enableReminder = async (chatId, reminderType, bot, reminderTasks) => {
 
             return task;
         } catch (error) {
-            console.error(`Ошибка при установке напоминания: ${error}`);
+            logError(`Ошибка при установке напоминания: ${error}`);
             bot.sendMessage(
                 chatId,
                 "Произошла ошибка при установке напоминания. Пожалуйста, попробуйте позже."
@@ -171,7 +182,7 @@ const enableReminder = async (chatId, reminderType, bot, reminderTasks) => {
             return null;
         }
     } else {
-        console.error(`Неверный тип напоминания: ${reminderType}`);
+        logError(`Неверный тип напоминания: ${reminderType}`);
         bot.sendMessage(
             chatId,
             "Неверный тип напоминания. Пожалуйста, попробуйте еще раз."
@@ -202,6 +213,8 @@ const handleAddComment = async (chatId, goalType) => {
     bot.once("message", async (msg) => {
         const comment = msg.text;
         const goalType = awaitingComment[chatId];
+        const userId = msg.from.id.toString();
+        const userName = msg.from.first_name;
 
         if (!goalType) {
             bot.sendMessage(
@@ -249,10 +262,19 @@ const handleAddComment = async (chatId, goalType) => {
 
             bot.sendMessage(
                 chatId,
-                `Ваш комментарий для целей на ${goalType} сохранен.`
+                `Ваш комментарий для отчёта на ${goalType} сохранен.`
             );
+
+            // Отправляем уведомление администратору
+            const adminNotification = getAdminNotification(
+                userName,
+                userId,
+                goalType,
+                comment
+            );
+            bot.sendMessage(ADMIN_USER_ID, adminNotification);
         } catch (error) {
-            console.error(`Ошибка при сохранении комментария: ${error}`);
+            logError(`Ошибка при сохранении комментария: ${error}`);
             bot.sendMessage(
                 chatId,
                 "Произошла ошибка при сохранении комментария. Пожалуйста, попробуйте позже."
@@ -263,25 +285,57 @@ const handleAddComment = async (chatId, goalType) => {
     });
 };
 
+// Функция для формирования уведомления администратору
+const getAdminNotification = (userName, userId, goalType, comment) => {
+    const goalTypeMap = {
+        daily_goals: "день",
+        weekly_goals: "неделю",
+        monthly_goals: "месяц",
+    };
+
+    const goalTypePeriod = goalTypeMap[goalType];
+
+    return `Пользователь с именем ${userName} и id ${userId} оставил комментарий для целей на ${goalTypePeriod} ✏️✍️:
+    ==============================
+    ${comment}`;
+};
+
 const sendWelcomeMessage = (chatId, firstName) => {
-    bot.sendMessage(chatId, `Приветствую, ${firstName} 👌!`);
+    return bot.sendMessage(
+        chatId,
+        `Приветствую тебя ${firstName} 👋
+        У каждого сотрудника у нас в компании есть ряд задач которые иногда теряются в потоке рабочих процессов. Я здесь для того, что бы напоминать тебе о них ✅
+        Как сейчас работают напоминания при включении:
+
+        на день 2 раза в день:
+        🕘9:30 утра и 16:00  по Киевскому времени с понедельника по пятницу
+
+        на неделю 1 раз в неделю:
+        🕓9:35 утра  по Киевскому времени  каждый понедельник
+
+        на месяц 1 раз в неделю:
+        🕙9:40 утра по Киевскому времени  в первый понедельник каждого месяца
+
+        ‼️Ежедневно в конце рабочего дня или сразу после выполнения задачи тебе необходимо будет написать отчет по итогам каждой задачи из списка.
+        `
+    );
 };
 
 const sendWelcomeButtons = (chatId, firstName) => {
-    bot.sendMessage(chatId, `Выберите тип целей: ✏️✍️`, {
+    return bot.sendMessage(chatId, `Выберите тип целей: ✏️✍️`, {
         reply_markup: {
             inline_keyboard: [
                 [
                     {
-                        text: "Цели на день ",
+                        text: "Цели на день 👇👇👇 ",
                         callback_data: "daily_goals",
                     },
                     {
-                        text: "Цели на неделю ",
+                        text: "Цели на неделю 👇👇👇",
                         callback_data: "weekly_goals",
                     },
                     {
-                        text: "Цели на месяц ",
+                        text: "Цели на месяц 👇👇👇",
                         callback_data: "monthly_goals",
                     },
                 ],
@@ -314,7 +368,7 @@ bot.on("callback_query", async (callbackQuery) => {
                                 callback_data: "enable_daily_reminder",
                             },
                             {
-                                text: "Добавить комментарий",
+                                text: "Добавить отчёт",
                                 callback_data: "add_comment",
                             },
                         ],
@@ -394,20 +448,20 @@ bot.on("callback_query", async (callbackQuery) => {
             );
             break;
         case "add_comment":
-            bot.sendMessage(chatId, "Выберите тип комментария:", {
+            bot.sendMessage(chatId, "Выберите тип отчёта:", {
                 reply_markup: {
                     inline_keyboard: [
                         [
                             {
-                                text: "День",
+                                text: "Отчёт на день",
                                 callback_data: "comment_daily",
                             },
                             {
-                                text: "Неделя",
+                                text: "Отчёт на неделю",
                                 callback_data: "comment_weekly",
                             },
                             {
-                                text: "Месяц",
+                                text: "Отчёт на месяц",
                                 callback_data: "comment_monthly",
                             },
                         ],
@@ -456,10 +510,78 @@ bot.onText(/\/unload/, async (msg) => {
             await unloadDataToAll(config.spreadsheetId);
             bot.sendMessage(chatId, "Данные успешно выгружены в лист all.");
         } catch (error) {
-            console.error(`Ошибка при выгрузке данных: ${error}`);
+            logError(`Ошибка при выгрузке данных: ${error}`);
             bot.sendMessage(chatId, "Произошла ошибка при выгрузке данных.");
         }
     } else {
         bot.sendMessage(chatId, "У вас нет прав для выполнения этой команды.");
     }
+});
+
+process.on("uncaughtException", (error) => {
+    logError(`Необработанная ошибка: ${error.stack || error}`);
+    process.exit(1);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+    logError(`Необработанное отклонение промиса: ${reason.stack || reason}`);
+});
+
+// Задача для удаления старых логов (запускается еженедельно)
+cron.schedule("0 0 * * 0", () => {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    try {
+        fs.readFile(logFile, "utf8", (err, data) => {
+            if (err) {
+                logError(`Ошибка при чтении файла логов: ${err}`);
+                return;
+            }
+
+            const lines = data.split("\n").filter((line) => {
+                const lineDate = new Date(line.split(" - ")[0]);
+                return lineDate >= thirtyDaysAgo;
+            });
+
+            const updatedLog = lines.join("\n");
+
+            fs.writeFile(logFile, updatedLog, (err) => {
+                if (err) {
+                    logError(`Ошибка при записи в файл логов: ${err}`);
+                }
+            });
+        });
+
+        fs.readFile(errorFile, "utf8", (err, data) => {
+            if (err) {
+                logError(`Ошибка при чтении файла ошибок: ${err}`);
+                return;
+            }
+
+            const lines = data.split("\n").filter((line) => {
+                const lineDate = new Date(line.split(" - ")[0]);
+                return lineDate >= thirtyDaysAgo;
+            });
+
+            const updatedLog = lines.join("\n");
+
+            fs.writeFile(errorFile, updatedLog, (err) => {
+                if (err) {
+                    logError(`Ошибка при записи в файл ошибок: ${err}`);
+                }
+            });
+        });
+    } catch (err) {
+        logError(`Ошибка при удалении старых логов: ${err}`);
+    }
+});
+
+// Обработчики ошибок и завершение процесса
+process.on("uncaughtException", (error) => {
+    logError(`Необработанная ошибка: ${error.stack || error}`);
+    process.exit(1);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+    logError(`Необработанное отклонение промиса: ${reason.stack || reason}`);
 });
