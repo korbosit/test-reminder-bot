@@ -252,6 +252,48 @@ bot.onText(/\/disable_monthly_tasks/, async (msg) => {
     bot.sendMessage(chatId, "Ежемесячные напоминания отключены ✅");
 });
 
+// Обработчик команды /enable_daily_tasks
+bot.onText(/\/enable_daily_tasks/, async (msg) => {
+    const chatId = msg.chat.id;
+    const task = await enableReminder(
+        chatId,
+        "enable_daily_reminder",
+        bot,
+        reminderTasks
+    );
+    if (task) {
+        bot.sendMessage(chatId, "Ежедневные напоминания включены ✅");
+    }
+});
+
+// Обработчик команды /enable_weekly_tasks
+bot.onText(/\/enable_weekly_tasks/, async (msg) => {
+    const chatId = msg.chat.id;
+    const task = await enableReminder(
+        chatId,
+        "enable_weekly_reminder",
+        bot,
+        reminderTasks
+    );
+    if (task) {
+        bot.sendMessage(chatId, "Еженедельные напоминания включены ✅");
+    }
+});
+
+// Обработчик команды /enable_monthly_tasks
+bot.onText(/\/enable_monthly_tasks/, async (msg) => {
+    const chatId = msg.chat.id;
+    const task = await enableReminder(
+        chatId,
+        "enable_monthly_reminder",
+        bot,
+        reminderTasks
+    );
+    if (task) {
+        bot.sendMessage(chatId, "Ежемесячные напоминания включены ✅");
+    }
+});
+
 // Функция для обработки добавления комментариев
 const handleAddComment = async (chatId, goalType) => {
     bot.sendMessage(chatId, "Введите ваш комментарий:");
